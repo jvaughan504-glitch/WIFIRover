@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
 // Simulated sensor values
-int front = 100, frontLeft = 95, frontRight = 102;
+int frontLeft = 95, frontRight = 102;
 int left = 85, right = 90;
 int temperature = 25, humidity = 50;
 
