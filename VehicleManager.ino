@@ -1,8 +1,4 @@
-diff --git a/VehicleManager.ino b/VehicleManager.ino
-index 6aa090132c5b6dd77296ea1bebc27dca388bd699..30dbb0c4db4b8fd041ee2ed5c21cf04e96ec6901 100644
---- a/VehicleManager.ino
-+++ b/VehicleManager.ino
-@@ -13,104 +13,128 @@ Servo rearServo;
+ Servo rearServo;
  
  // === ESC ===
  #define ESC_PIN 12
