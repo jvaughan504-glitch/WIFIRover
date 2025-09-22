@@ -31,7 +31,7 @@
 +const uint8_t SPEED_SENSOR_PIN = 2;
 +volatile unsigned long pulseCount = 0;
 +
-+const float WHEEL_CIRCUMFERENCE_CM = 46.0f;
++const float WHEEL_CIRCUMFERENCE_CM = 46.5f;
 +const float SHAFT_REV_PER_METER = 2.846f;
 +const float MAGNETS_PER_REV = 4.0f;
 +const float DISTANCE_PER_PULSE_CM = WHEEL_CIRCUMFERENCE_CM / (SHAFT_REV_PER_METER * MAGNETS_PER_REV);
