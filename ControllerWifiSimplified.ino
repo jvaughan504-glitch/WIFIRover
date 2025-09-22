@@ -1,8 +1,4 @@
-diff --git a/ControllerWifiSimplified.ino b/ControllerWifiSimplified.ino
-index 9cc1123c059192ffe7568115af2dd13df5af395c..020699c22efc96f1bb51bee12790ea6eabd18557 100644
---- a/ControllerWifiSimplified.ino
-+++ b/ControllerWifiSimplified.ino
-@@ -5,118 +5,171 @@
+
  // =========================
  // WiFi Config
  // =========================
