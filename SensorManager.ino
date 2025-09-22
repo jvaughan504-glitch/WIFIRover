@@ -5,10 +5,6 @@ index bbb0b749adf8c6e3db790847ed6524dd828aa349..78999fc9a7a39b00e31652a85c7c9e14
 @@ -1,30 +1,155 @@
  #include <Arduino.h>
  
--// Simulated sensor values
--int frontLeft = 95, frontRight = 102;
--int left = 85, right = 90;
--int temperature = 25, humidity = 50;
 +// =============================
 +// Ultrasonic Sensor Definitions
 +// =============================
