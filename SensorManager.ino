@@ -119,7 +119,6 @@
 -
 -    // Format: S:front,frontLeft,frontRight,left,right,temp,hum;
 -    Serial.print("S:");
--    Serial.print(front); Serial.print(",");
 -    Serial.print(frontLeft); Serial.print(",");
 -    Serial.print(frontRight); Serial.print(",");
 -    Serial.print(left); Serial.print(",");
