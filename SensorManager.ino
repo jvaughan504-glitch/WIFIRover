@@ -1,4 +1,4 @@
-//SensorManager
+//SensorManager v3
  #include <Arduino.h>
  
 +// =============================
