@@ -10,6 +10,8 @@
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
+#include <math.h>
+#include <string.h>
 
 // =========================
 // WiFi Config
@@ -52,13 +54,13 @@ bool autonomousMode = false;
 bool hornOn = false;
 bool lightsOn = false;
 
-int obstacleThreshold = 100;
-int targetSpeed = 50;
+float obstacleThreshold = 100.0f;
+float targetSpeed = 0.6f; // metres per second
 
-int distances[5] = {0};
-int temp = 0;
-int hum = 0;
-int speed = 0;
+float distances[5] = {NAN, NAN, NAN, NAN, NAN};
+float temp = NAN;
+float hum = NAN;
+float speed = NAN;
 
 // =========================
 // Web page (with toggle buttons)
@@ -102,7 +104,7 @@ button { margin:5px; padding:15px; font-size:1.2em; border:none; border-radius:8
 <div id="trr" class="tile">Rear Right<br><span id="rr">?</span> cm</div>
 <div class="tile">Temp<br><span id="t">?</span> °C</div>
 <div class="tile">Humidity<br><span id="h">?</span> %</div>
-<div class="tile">Speed<br><span id="s">?</span> %</div>
+<div class="tile">Speed<br><span id="s">?</span> m/s</div>
 </div>
 
 <div class="controls">
@@ -125,25 +127,38 @@ ws.onmessage = function(evt) {
   else { st.textContent="Manual"; st.className="status manual"; }
 
   // Distances
-  updateTile("f","tf",data.dist[0]);
-  updateTile("fl","tfl",data.dist[1]);
-  updateTile("fr","tfr",data.dist[2]);
-  updateTile("rl","trl",data.dist[3]);
-  updateTile("rr","trr",data.dist[4]);
+  updateTile("f","tf",data.dist[0],1);
+  updateTile("fl","tfl",data.dist[1],1);
+  updateTile("fr","tfr",data.dist[2],1);
+  updateTile("rl","trl",data.dist[3],1);
+  updateTile("rr","trr",data.dist[4],1);
 
-  document.getElementById("t").textContent  = data.temp;
-  document.getElementById("h").textContent  = data.hum;
-  document.getElementById("s").textContent  = data.speed;
+  document.getElementById("t").textContent  = formatReading(data.temp,1);
+  document.getElementById("h").textContent  = formatReading(data.hum,1);
+  document.getElementById("s").textContent  = formatReading(data.speed,2);
 
   // Update horn/lights buttons
   updateButton("btnHorn", data.horn);
   updateButton("btnLights", data.lights);
 };
-function updateTile(valId,tileId,value) {
-  document.getElementById(valId).textContent = value;
+function updateTile(valId,tileId,value,decimals) {
+  var display = formatReading(value,decimals);
+  document.getElementById(valId).textContent = display;
   var tile = document.getElementById(tileId);
-  if(value>0 && value<100) { tile.className="tile warn"; }
-  else { tile.className="tile safe"; }
+  if(display === "--") {
+    tile.className="tile";
+  } else {
+    var numeric = Number(value);
+    if(!Number.isNaN(numeric) && numeric>0 && numeric<100) { tile.className="tile warn"; }
+    else { tile.className="tile safe"; }
+  }
+}
+function formatReading(value,decimals) {
+  if(value === null || value === undefined) { return "--"; }
+  var num = Number(value);
+  if(Number.isNaN(num)) { return "--"; }
+  if(typeof decimals === "number") { return num.toFixed(decimals); }
+  return num.toString();
 }
 function updateButton(id,state) {
   var btn = document.getElementById(id);
@@ -186,8 +201,10 @@ void setup() {
 void loop() {
   handleUDP();
   forwardTelemetry();
-  if (autonomousMode) autonomousControl();
-  else checkFailsafe();
+  if (autonomousMode) {
+    autonomousControl();
+  }
+  checkFailsafe();
 
   server.handleClient();
   webSocket.loop();
@@ -220,10 +237,13 @@ void sendStatus() {
   doc["horn"] = hornOn;
   doc["lights"] = lightsOn;
   JsonArray arr = doc.createNestedArray("dist");
-  for (int i=0;i<5;i++) arr.add(distances[i]);
-  doc["temp"] = temp;
-  doc["hum"] = hum;
-  doc["speed"] = speed;
+  for (int i=0;i<5;i++) {
+    if (isnan(distances[i])) arr.add(nullptr);
+    else arr.add(distances[i]);
+  }
+  if (isnan(temp)) doc["temp"] = nullptr; else doc["temp"] = temp;
+  if (isnan(hum)) doc["hum"] = nullptr; else doc["hum"] = hum;
+  if (isnan(speed)) doc["speed"] = nullptr; else doc["speed"] = speed;
 
   String json;
   serializeJson(doc, json);
@@ -284,51 +304,115 @@ void forwardTelemetry() {
   }
 }
 
+float parseTelemetryToken(const char* tok) {
+  if (!tok) return NAN;
+  String token = String(tok);
+  token.trim();
+  if (token.length() == 0) return NAN;
+  token.toLowerCase();
+  if (token == "null" || token == "nan") return NAN;
+  return token.toFloat();
+}
+
 void parseTelemetry(String line) {
   line.remove(0, 2);
-  int parts[8];
+  float values[8] = {NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN};
   int idx = 0;
   char buf[128];
   line.toCharArray(buf, sizeof(buf));
-  char* tok = strtok(buf, ",;");
+  char* context = nullptr;
+  char* tok = strtok_r(buf, ",;", &context);
   while (tok && idx < 8) {
-    parts[idx++] = atoi(tok);
-    tok = strtok(NULL, ",;");
+    values[idx++] = parseTelemetryToken(tok);
+    tok = strtok_r(NULL, ",;", &context);
   }
-  if (idx >= 7) {
-    for (int i = 0; i<5; i++) distances[i] = parts[i];
-    temp = parts[5];
-    hum = parts[6];
-    if (idx >= 8) speed = parts[7];
+  for (int i = 0; i < 5; i++) {
+    distances[i] = (i < idx) ? values[i] : NAN;
   }
+  temp = (idx > 5) ? values[5] : NAN;
+  hum = (idx > 6) ? values[6] : NAN;
+  speed = (idx > 7) ? values[7] : NAN;
+}
+
+bool distanceBlocked(float reading) {
+  return !isnan(reading) && reading > 0 && reading < obstacleThreshold;
+}
+
+float usableDistance(float reading) {
+  if (isnan(reading) || reading <= 0) return 0.0f;
+  return reading;
+}
+
+int determineCruiseThrottle() {
+  if (!isnan(speed)) {
+    if (speed < targetSpeed - 0.05f) return 120;
+    if (speed > targetSpeed + 0.05f) return 80;
+    return 100;
+  }
+  return 110;
 }
 
 // =========================
 // Autonomous logic
 // =========================
 void autonomousControl() {
-  int steer = 90, throttle = 90;
-  bool frontBlocked = (distances[0] > 0 && distances[0] < obstacleThreshold);
-  bool leftBlocked  = (distances[1] > 0 && distances[1] < obstacleThreshold);
-  bool rightBlocked = (distances[2] > 0 && distances[2] < obstacleThreshold);
+  if (failsafeActive) {
+    return;
+  }
+  int steer = 90;
+  int throttle = determineCruiseThrottle();
 
-  if (frontBlocked && leftBlocked && rightBlocked) {
-    int rearLeft = distances[3];
-    int rearRight = distances[4];
-    throttle = 70;
-    steer = (rearLeft > rearRight) ? 60 : 120;
+  bool frontSensorValid = !isnan(distances[0]);
+  bool frontLeftBlocked = distanceBlocked(distances[1]);
+  bool frontRightBlocked = distanceBlocked(distances[2]);
+  bool frontBlocked = frontSensorValid ? distanceBlocked(distances[0]) : (frontLeftBlocked || frontRightBlocked);
+  bool rearLeftBlocked = distanceBlocked(distances[3]);
+  bool rearRightBlocked = distanceBlocked(distances[4]);
+
+  if (frontBlocked) {
+    if (throttle > 80) throttle = 80;
+    if (frontLeftBlocked && !frontRightBlocked) {
+      steer = 60;
+    } else if (frontRightBlocked && !frontLeftBlocked) {
+      steer = 120;
+    } else if (frontLeftBlocked && frontRightBlocked) {
+      float leftClearance = usableDistance(distances[1]);
+      float rearLeftClearance = usableDistance(distances[3]);
+      if (rearLeftClearance > leftClearance) leftClearance = rearLeftClearance;
+      float rightClearance = usableDistance(distances[2]);
+      float rearRightClearance = usableDistance(distances[4]);
+      if (rearRightClearance > rightClearance) rightClearance = rearRightClearance;
+      steer = (rightClearance > leftClearance) ? 120 : 60;
+      if (rearLeftBlocked && rearRightBlocked) {
+        throttle = 90; // stop if boxed in
+      } else {
+        throttle = 70; // gently reverse to create space
+      }
+    } else {
+      steer = 90;
+    }
   } else {
-    if (!frontBlocked) steer = 90;
-    else if (!leftBlocked && rightBlocked) steer = 60;
-    else if (!rightBlocked && leftBlocked) steer = 120;
-    else steer = (distances[1] > distances[2]) ? 60 : 120;
-
-    if (speed < targetSpeed) throttle = 120;
-    else if (speed > targetSpeed) throttle = 80;
-    else throttle = 100;
+    if (frontLeftBlocked && !frontRightBlocked) {
+      steer = 60;
+      if (throttle > 90) throttle = 90;
+    } else if (frontRightBlocked && !frontLeftBlocked) {
+      steer = 120;
+      if (throttle > 90) throttle = 90;
+    } else if (frontLeftBlocked && frontRightBlocked) {
+      float leftClearance = usableDistance(distances[1]);
+      float rightClearance = usableDistance(distances[2]);
+      steer = (rightClearance > leftClearance) ? 120 : 60;
+      if (throttle > 90) throttle = 90;
+    } else {
+      steer = 90;
+    }
   }
 
-  String cmd = "STEER:" + String(steer) + ";THROT:" + String(throttle) + ";HORN:" + String(hornOn ? 1:0) + ";LIGHTS:" + String(lightsOn ? 1:0) + ";AUTO:1;";
+  String cmd = "STEER:" + String(steer) +
+               ";THROT:" + String(throttle) +
+               ";HORN:" + String(hornOn ? 1 : 0) +
+               ";LIGHTS:" + String(lightsOn ? 1 : 0) +
+               ";AUTO:1;";
   nano2.println(cmd);
 }
 
