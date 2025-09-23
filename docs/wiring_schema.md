@@ -11,14 +11,14 @@ reproduce the hardware layout when assembling the WIFIRover platform.
                                             ↘ UART1 ⇄ Sensor Nano
 ```
 
-- The **controller ESP32** is battery powered and drives a TFT_eSPI display,
+- The **controller ESP32** is battery powered and drives a Adafruit SSD1306 display,
   joystick, and two momentary buttons.
 - The **robot ESP32** is chassis-mounted, supplies regulated 5 V to the Arduino
   Nanos, and bridges Wi-Fi to two independent UARTs.
 - The **Vehicle Manager Nano** actuates the steering servos, ESC, horn relay, and
   auxiliary lights.
 - The **Sensor Manager Nano** aggregates four ultrasonic rangefinders and a
-  wheel speed sensor, then streams telemetry.
+  wheel speed sensor, and DHT11 temp/humidity sensor. then streams telemetry.
 
 > ⚠️ *Always share a common ground between every board and peripheral.*
 
