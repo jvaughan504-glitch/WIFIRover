@@ -83,17 +83,3 @@ Adapt pin choices to match the actual sensors you deploy, ensuring the telemetry
 format documented in [`communication_protocol.md`](communication_protocol.md) is
 maintained.
 
-## Speed Sensor Module (Standalone)
-If you deploy the speed sensor monitor (`SpeedSensor.ino`), wire the components
-as follows:
-
-| Function               | Arduino Pin | Notes |
-|------------------------|-------------|-------|
-| Hall effect sensor     | D2          | Uses an interrupt on the rising edge. Enable pull-up if the sensor is open drain. |
-| OLED SDA               | A4 (SDA)    | Default I²C data line on Arduino Uno/Nano. |
-| OLED SCL               | A5 (SCL)    | Default I²C clock line. |
-| OLED VCC / GND         | 5 V, GND    | The SSD1306 module typically accepts 3.3–5 V. |
-
-Mount four magnets evenly around the drivetrain shaft so the sensor registers
-four pulses per revolution. Adjust the `distancePerPulse` constant if your wheel
-circumference or magnet count differs from the example configuration.

@@ -15,9 +15,6 @@ Wi-Fi and serial links:
 4. **Sensor Manager (Arduino Nano)** – Streams distance, temperature, and
    humidity readings to the Wi-Fi hub, which are then sent to the controller.
 
-An optional **Speed Sensor module** (standalone sketch) reports average speed and
-travelled distance on an OLED display and the serial monitor.
-
 ```
 [Controller ESP32] ⇄ Wi-Fi UDP ⇄ [Robot ESP32] ⇄ UART1 ⇄ [Sensor Nano]
                                             ⇓ UART2
@@ -97,14 +94,3 @@ following order:
 
 Values are labelled and units appended (`cm`, `C`, `%`).
 
-## Speed Sensor Telemetry (Standalone)
-The `SpeedSensor.ino` sketch samples a hall-effect wheel sensor on digital pin 2
-and reports:
-
-- Raw and averaged linear speed (in m/s) on the serial monitor.
-- Total distance travelled (in metres).
-- Averaged speed and distance on a 128×64 OLED display addressed at I²C `0x3C`.
-
-The distance per pulse is set to 4.04 cm (derived from the measured wheel
-circumference and magnet configuration). A rolling average of the last five
-samples smooths the reported speed.

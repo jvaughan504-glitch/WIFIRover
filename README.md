@@ -14,8 +14,7 @@ studying each subsystem in isolation.
   environment sensing, allowing the Wi-Fi hub to focus on networking and
   failsafe logic.
 - **Telemetry feedback** – Sensor data is forwarded to the controller and shown
-  on a TFT display, while a standalone speed monitoring sketch visualises motion
-  on an OLED.
+  on a TFT display.
 
 ## Repository Layout
 | File / Folder | Purpose |
@@ -24,7 +23,6 @@ studying each subsystem in isolation.
 | `MCUwifiSimplified.ino` | ESP32 access-point firmware that bridges Wi-Fi to dual UARTs. |
 | `VehicleManager.ino` | Arduino Nano sketch controlling servos, ESC, horn, and lights. |
 | `SensorManager.ino` | Arduino Nano sketch that streams environment telemetry (currently simulated). |
-| `SpeedSensor.ino` | Optional module measuring wheel speed and distance with a hall sensor. |
 | `docs/communication_protocol.md` | Detailed description of command packets and telemetry framing. |
 | `docs/wiring_schema.md` | Pinout reference and wiring guidelines for all modules. |
 
@@ -36,10 +34,9 @@ studying each subsystem in isolation.
      supply servos/ESC current peaks.
 2. **Flash the firmware**
    - Upload each sketch to its respective board (controller ESP32, robot ESP32,
-     Vehicle Manager Nano, Sensor Manager Nano, and optional speed sensor
-     module).
+     Vehicle Manager Nano, and Sensor Manager Nano).
    - Confirm serial baud rates match the sketches (115200 bps for all inter-board
-     links except the speed sensor at 9600 bps).
+     links).
 3. **Establish the network link**
    - Power the robot ESP32 to start the `Robot_AP` access point (password
      `12345678`).
@@ -49,8 +46,6 @@ studying each subsystem in isolation.
    - Watch the Vehicle Manager servos/ESC respond to joystick inputs.
    - Check that telemetry values appear on the controller TFT, confirming the
      Sensor Manager and Wi-Fi bridge are operating.
-   - (Optional) Monitor averaged speed and distance on the OLED if the speed
-     sensor module is installed.
 
 ## Communication and Telemetry
 The command string format, failsafe behaviour, and telemetry framing are fully
