@@ -1,4 +1,4 @@
-# Wiring Schema
+D# Wiring Schema
 
 This document captures the wiring expectations encoded in the Arduino sketches.
 It focuses on pin assignments, power domains, and serial links so you can
@@ -29,7 +29,7 @@ reproduce the hardware layout when assembling the WIFIRover platform.
 | Joystick Y (ADC)    | 35        | Same wiring as X axis. |
 | Button 1 (horn)     | 0         | Uses `INPUT_PULLUP`; connect button to ground. |
 | Button 2 (lights)   | 2         | Uses `INPUT_PULLUP`; connect button to ground. |
-| TFT display         | SPI pins  | Follows [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) default wiring for your board profile. |
+| OLED display         | SPI pins  | Follows [Adafruit SSD1306 default wiring for your board profile. |
 
 Power the controller from a 3.3 V capable supply or LiPo pack via the ESP32's
 regulated input. The joystick potentiometer and buttons operate at 3.3 V logic.
