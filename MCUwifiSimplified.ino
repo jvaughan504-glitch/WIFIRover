@@ -1,6 +1,7 @@
 //MCUwifiSimplified (Improved)
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <ctype.h>
 
 // =========================
 // WiFi Config
@@ -27,6 +28,10 @@ int remotePort = 4210;        // Controller port
 
 HardwareSerial nano1(1);  // Sensor Manager
 HardwareSerial nano2(2);  // Vehicle Manager
+
+#define TELEMETRY_BUFFER_SIZE 256
+char telemetryBuffer[TELEMETRY_BUFFER_SIZE];
+size_t telemetryIndex = 0;
 
 // =========================
 // Watchdog
@@ -97,15 +102,43 @@ void handleUDP() {
 // =========================
 void forwardTelemetry() {
   while (nano1.available()) {
-    String telemetry = nano1.readStringUntil('\n');
-    telemetry.trim();
-    if (telemetry.length() > 0 && remoteIP) {
-      udp.beginPacket(remoteIP, remotePort);
-      udp.print(telemetry);
-      udp.endPacket();
+    char c = nano1.read();
 
-      Serial.print("Forwarded telemetry: ");
-      Serial.println(telemetry);
+    if (c == '\n') {
+      if (telemetryIndex >= TELEMETRY_BUFFER_SIZE) {
+        telemetryIndex = 0;
+      }
+      telemetryBuffer[telemetryIndex] = '\0';
+
+      size_t start = 0;
+      while (start < telemetryIndex && isspace(static_cast<unsigned char>(telemetryBuffer[start]))) {
+        start++;
+      }
+
+      size_t end = telemetryIndex;
+      while (end > start && isspace(static_cast<unsigned char>(telemetryBuffer[end - 1]))) {
+        end--;
+      }
+      telemetryBuffer[end] = '\0';
+
+      if (end > start && remoteIP) {
+        udp.beginPacket(remoteIP, remotePort);
+        udp.write(reinterpret_cast<const uint8_t*>(telemetryBuffer + start), end - start);
+        udp.endPacket();
+
+        Serial.print("Forwarded telemetry: ");
+        Serial.println(telemetryBuffer + start);
+      }
+
+      telemetryIndex = 0;
+    } else if (c == '\r') {
+      // ignore carriage returns
+    } else {
+      if (telemetryIndex < TELEMETRY_BUFFER_SIZE - 1) {
+        telemetryBuffer[telemetryIndex++] = c;
+      } else {
+        telemetryIndex = 0;
+      }
     }
   }
 }

@@ -27,6 +27,7 @@ int throttle = 90;
 bool hornOn = false;
 bool lightsOn = false;
 bool autonomousMode = false;
+bool failsafeEngaged = false;
 
 // === Watchdog ===
 unsigned long lastCommandTime = 0;
@@ -89,22 +90,32 @@ void receiveCommands() {
 // Parse incoming command
 // ----------------------
 void parseCommands(char* packet) {
+  bool receivedControlUpdate = false;
   char* token = strtok(packet, ";");
   while (token != NULL) {
     if (strncmp(token, "STEER:", 6) == 0) {
       steering = constrain(atoi(token + 6), 0, 180);
+      receivedControlUpdate = true;
     } else if (strncmp(token, "THROT:", 6) == 0) {
       throttle = constrain(atoi(token + 6), 0, 180);
+      receivedControlUpdate = true;
     } else if (strncmp(token, "HORN:", 5) == 0) {
       hornOn = atoi(token + 5) != 0;
+      receivedControlUpdate = true;
     } else if (strncmp(token, "LIGHTS:", 7) == 0) {
       lightsOn = atoi(token + 7) != 0;
+      receivedControlUpdate = true;
     } else if (strncmp(token, "AUTO:", 5) == 0) {
       autonomousMode = atoi(token + 5) != 0;
+      receivedControlUpdate = true;
     } else if (strcmp(token, "CMD FAILSAFE") == 0 || strcmp(token, "FAILSAFE") == 0) {
       activateFailsafe();
     }
     token = strtok(NULL, ";");
+  }
+
+  if (receivedControlUpdate) {
+    failsafeEngaged = false;
   }
 }
 
@@ -112,7 +123,7 @@ void parseCommands(char* packet) {
 // Check failsafe
 // ----------------------
 void checkFailsafe() {
-  if (millis() - lastCommandTime > TIMEOUT) {
+  if (!failsafeEngaged && millis() - lastCommandTime > TIMEOUT) {
     activateFailsafe();
   }
 }
@@ -134,6 +145,7 @@ void activateFailsafe() {
   hornOn = false;
   lightsOn = false;
   autonomousMode = false;
+  failsafeEngaged = true;
 
   frontServo.write(steering);
   rearServo.write(steering);
