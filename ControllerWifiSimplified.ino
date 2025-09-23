@@ -2,6 +2,9 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <TFT_eSPI.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 // =========================
 // WiFi Config
@@ -107,16 +110,22 @@ void sendControl() {
   }
   lastSendTime = now;
 
-  String cmd;
-  cmd.reserve(64);
-  cmd += "STEER:" + String(steer) + ";";
-  cmd += "THROT:" + String(throttle) + ";";
-  cmd += "HORN:" + String(horn ? 1 : 0) + ";";
-  cmd += "LIGHTS:" + String(lights ? 1 : 0) + ";";
-  cmd += "AUTO:0;";
+  char cmd[64];
+  int length = snprintf(cmd, sizeof(cmd),
+                        "STEER:%d;THROT:%d;HORN:%d;LIGHTS:%d;AUTO:0;",
+                        steer,
+                        throttle,
+                        horn ? 1 : 0,
+                        lights ? 1 : 0);
+  if (length < 0) {
+    return;
+  }
+  if (length >= static_cast<int>(sizeof(cmd))) {
+    length = sizeof(cmd) - 1;
+  }
 
   udp.beginPacket(robotIP, robotPort);
-  udp.print(cmd);
+  udp.write(reinterpret_cast<const uint8_t*>(cmd), length);
   udp.endPacket();
 }
 
@@ -133,38 +142,46 @@ void readTelemetry() {
   }
   buffer[len] = '\0';
 
-  displayTelemetry(String(buffer));
+  displayTelemetry(buffer);
 }
 
-void displayTelemetry(const String& telemetry) {
+void displayTelemetry(const char* telemetry) {
   tft.fillScreen(TFT_BLACK);
   tft.setCursor(0, 0);
   tft.println("Telemetry:");
 
-  int firstColon = telemetry.indexOf(':');
-  if (firstColon == -1) {
+  const char* firstColon = strchr(telemetry, ':');
+  if (!firstColon) {
     tft.println("No data");
     return;
   }
 
-  String payload = telemetry.substring(firstColon + 1);
-  payload.trim();
-  if (payload.endsWith(";")) {
-    payload.remove(payload.length() - 1);
+  const char* payloadStart = firstColon + 1;
+  size_t payloadLength = strlen(payloadStart);
+  if (payloadLength == 0) {
+    tft.println("No data");
+    return;
+  }
+
+  char payload[128];
+  if (payloadLength >= sizeof(payload)) {
+    payloadLength = sizeof(payload) - 1;
+  }
+  memcpy(payload, payloadStart, payloadLength);
+  payload[payloadLength] = '\0';
+
+  char* endMarker = strrchr(payload, ';');
+  if (endMarker != nullptr) {
+    *endMarker = '\0';
   }
 
   float values[6] = {0};
-  int valueCount = 0;
-  int start = 0;
-  while (valueCount < 6 && start < payload.length()) {
-    int comma = payload.indexOf(',', start);
-    if (comma == -1) {
-      comma = payload.length();
-    }
-    String token = payload.substring(start, comma);
-    token.trim();
-    values[valueCount++] = token.toFloat();
-    start = comma + 1;
+  uint8_t valueCount = 0;
+  char* savePtr = nullptr;
+  char* token = strtok_r(payload, ",", &savePtr);
+  while (token != nullptr && valueCount < 6) {
+    values[valueCount++] = atof(token);
+    token = strtok_r(nullptr, ",", &savePtr);
   }
 
   if (valueCount < 6) {
