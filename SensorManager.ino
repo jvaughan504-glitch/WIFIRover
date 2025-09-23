@@ -48,6 +48,12 @@ unsigned long lastSpeedSample = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 200;
 unsigned long lastTelemetry = 0;
 
+// Telemetry payload format (comma separated):
+//   front,frontLeft,frontRight,rearLeft,rearRight,temp,humidity,speed
+// The rover currently lacks a dedicated front ultrasonic sensor and any
+// environmental probes, so those fields are populated with placeholder values
+// ("null" for the missing front reading and "nan" for temperature/humidity).
+
 // =============================
 // Interrupt Service Routine
 // =============================
@@ -146,12 +152,15 @@ void loop() {
   float avgSpeedMps = computeAverageSpeed(rawSpeedMps);
 
   Serial.print("S:");
-  for (uint8_t i = 0; i < 4; ++i) {
-    Serial.print(distances[i], 1);
-    Serial.print(",");
-  }
-  Serial.print(avgSpeedMps, 2);
+  Serial.print("null,");            // front sensor placeholder
+  Serial.print(distances[0], 1);     // front-left
   Serial.print(",");
-  Serial.print(totalDistanceCm / 100.0f, 2);
+  Serial.print(distances[1], 1);     // front-right
+  Serial.print(",");
+  Serial.print(distances[2], 1);     // rear-left
+  Serial.print(",");
+  Serial.print(distances[3], 1);     // rear-right
+  Serial.print(",nan,nan,");        // temperature & humidity placeholders
+  Serial.print(avgSpeedMps, 2);      // speed (m/s)
   Serial.println(";");
 }
