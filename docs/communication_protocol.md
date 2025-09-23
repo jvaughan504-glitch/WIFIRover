@@ -4,8 +4,8 @@
 The WIFIRover platform is composed of four microcontroller roles that cooperate over
 Wi-Fi and serial links:
 
-1. **Handheld Controller (ESP32 + TFT)** – Reads joystick and button inputs and
-   sends driving commands over UDP while rendering telemetry on the TFT screen.
+1. **Handheld Controller (ESP32 + OLED)** – Reads joystick and button inputs and
+   sends driving commands over UDP while rendering telemetry on the OLED screen.
 2. **Robot Wi-Fi Hub (ESP32)** – Hosts the Wi-Fi access point, relays control
    commands to the vehicle electronics, forwards telemetry back to the
    controller, and enforces a failsafe.
@@ -92,7 +92,7 @@ transmission.
 
 ### Controller Telemetry Rendering
 The controller searches the incoming telemetry string for the first colon, then
-extracts comma-separated values and displays them on the TFT display in the
+extracts comma-separated values and displays them on the OLED display in the
 following order:
 
 1. Front-left distance (`FL`)
