@@ -1,7 +1,6 @@
+// SensorManager v3
+#include <Arduino.h>
 
-//SensorManager v3
- #include <Arduino.h>
- 
 // =============================
 // Ultrasonic Sensor Definitions
 // =============================
@@ -9,9 +8,7 @@ struct UltrasonicSensor {
   uint8_t trigPin;
   uint8_t echoPin;
 };
- 
-unsigned long lastSend = 0;
-const unsigned long interval = 500; // ms
+
 const UltrasonicSensor FRONT_LEFT  = {3, 4};
 const UltrasonicSensor FRONT_RIGHT = {5, 6};
 const UltrasonicSensor REAR_LEFT   = {7, 8};
@@ -22,9 +19,10 @@ const UltrasonicSensor sensors[4] = {
   REAR_LEFT,
   REAR_RIGHT
 };
- 
+
 const unsigned long ULTRASONIC_TIMEOUT_US = 30000UL; // ~5 m max distance
 const float SOUND_SPEED_CM_PER_US = 0.0343f;
+
 // =============================
 // Speed Sensor Definitions
 // =============================
@@ -34,7 +32,8 @@ volatile unsigned long pulseCount = 0;
 const float WHEEL_CIRCUMFERENCE_CM = 46.5f;
 const float SHAFT_REV_PER_METER = 2.846f;
 const float MAGNETS_PER_REV = 4.0f;
-const float DISTANCE_PER_PULSE_CM = WHEEL_CIRCUMFERENCE_CM / (SHAFT_REV_PER_METER * MAGNETS_PER_REV);
+const float DISTANCE_PER_PULSE_CM =
+  WHEEL_CIRCUMFERENCE_CM / (SHAFT_REV_PER_METER * MAGNETS_PER_REV);
 
 #define SPEED_AVG_SAMPLES 5
 float speedBuffer[SPEED_AVG_SAMPLES] = {0};
@@ -59,7 +58,7 @@ void countPulse() {
 // =============================
 // Utility Functions
 // =============================
-float readDistanceCm(const UltrasonicSensor &sensor) {
+float readDistanceCm(const UltrasonicSensor& sensor) {
   digitalWrite(sensor.trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(sensor.trigPin, HIGH);
@@ -98,9 +97,9 @@ float computeAverageSpeed(float latestSample) {
 // Setup & Loop
 // =============================
 void setup() {
-   Serial.begin(115200);
+  Serial.begin(115200);
 
-  for (const UltrasonicSensor &sensor : sensors) {
+  for (const UltrasonicSensor& sensor : sensors) {
     pinMode(sensor.trigPin, OUTPUT);
     pinMode(sensor.echoPin, INPUT);
     digitalWrite(sensor.trigPin, LOW);
@@ -111,21 +110,9 @@ void setup() {
 
   lastTelemetry = millis();
   lastSpeedSample = lastTelemetry;
- }
- 
- void loop() {
-  if (millis() - lastSend > interval) {
-    lastSend = millis();
+}
 
-    // Format: S:front,frontLeft,frontRight,left,right,temp,hum;
-    Serial.print("S:");
-    Serial.print(frontLeft); Serial.print(",");
-    Serial.print(frontRight); Serial.print(",");-
-    Serial.print(left); Serial.print(",");
-     Serial.print(right); Serial.print(",");
- Serial.print(temperature); Serial.print(",");
-    Serial.print(humidity);
-    Serial.println(";");
+void loop() {
   unsigned long now = millis();
   if (now - lastTelemetry < TELEMETRY_INTERVAL_MS) {
     return;
@@ -167,5 +154,4 @@ void setup() {
   Serial.print(",");
   Serial.print(totalDistanceCm / 100.0f, 2);
   Serial.println(";");
- }
-
+}
