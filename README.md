@@ -14,7 +14,7 @@ studying each subsystem in isolation.
   environment sensing, allowing the Wi-Fi hub to focus on networking and
   failsafe logic.
 - **Telemetry feedback** – Sensor data is forwarded to the controller and shown
-  on a TFT display.
+  on a oled display.
 
 ## Repository Layout
 | File / Folder | Purpose |
