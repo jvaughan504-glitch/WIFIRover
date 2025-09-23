@@ -19,7 +19,7 @@ studying each subsystem in isolation.
 ## Repository Layout
 | File / Folder | Purpose |
 | --- | --- |
-| `ControllerWifiSimplified.ino` | Firmware for the handheld ESP32 controller with TFT UI. |
+| `ControllerWifiSimplified.ino` | Firmware for the handheld ESP32 controller with oled UI. |
 | `MCUwifiSimplified.ino` | ESP32 access-point firmware that bridges Wi-Fi to dual UARTs. |
 | `VehicleManager.ino` | Arduino Nano sketch controlling servos, ESC, horn, and lights. |
 | `SensorManager.ino`  | Arduino Nano telemetry node for ultrasonic rangefinders and wheel speed sensing. |
