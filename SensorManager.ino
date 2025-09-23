@@ -1,3 +1,4 @@
+
 //SensorManager v3
  #include <Arduino.h>
  
@@ -168,3 +169,4 @@
 +  Serial.print(totalDistanceCm / 100.0f, 2);
 +  Serial.println(";");
  }
+
