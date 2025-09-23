@@ -1,7 +1,9 @@
 // WIFI Controller v1
 #include <WiFi.h>
 #include <WiFiUdp.h>
-#include <TFT_eSPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -18,7 +20,11 @@ WiFiUDP udp;
 // =========================
 // Display
 // =========================
-TFT_eSPI tft = TFT_eSPI();
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+#define OLED_I2C_ADDRESS 0x3D  // Default I2C address for the 128x64 Micro OLED
+Adafruit_SSD1306 oled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // =========================
 // Joystick & Buttons
@@ -46,22 +52,34 @@ const unsigned long sendInterval = 100; // ms
 // =========================
 // Helpers
 // =========================
-void drawDistanceLine(const char* label, float value) {
+void drawDistanceValue(int16_t x, int16_t y, const char* label, float value) {
+  oled.setCursor(x, y);
+  oled.print(label);
+  oled.print(F(": "));
   if (value < 0) {
-    tft.printf("%s: ---\n", label);
+    oled.print(F("--.-"));
   } else {
-    tft.printf("%s: %.1f cm\n", label, value);
+    oled.print(value, 1);
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  tft.init();
-  tft.setRotation(1);
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_GREEN, TFT_BLACK);
-  tft.setTextSize(2);
-  tft.println("Controller Booting...");
+  if (!oled.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRESS)) {
+    Serial.println(F("SSD1306 init failed"));
+    while (true) {
+      delay(10);
+    }
+  }
+  oled.clearDisplay();
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setTextSize(1);
+  oled.setTextWrap(false);
+  oled.setCursor(0, 0);
+  oled.println(F("Controller"));
+  oled.println(F("Booting..."));
+  oled.println(F("Connecting..."));
+  oled.display();
 
   pinMode(BTN1, INPUT_PULLUP);
   pinMode(BTN2, INPUT_PULLUP);
@@ -73,9 +91,12 @@ void setup() {
   }
 
   udp.begin(robotPort);
-  tft.println("WiFi Connected");
-  tft.print("IP: ");
-  tft.println(WiFi.localIP());
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  oled.println(F("WiFi Ready"));
+  oled.print(F("IP:"));
+  oled.println(WiFi.localIP());
+  oled.display();
 }
 
 void loop() {
@@ -146,20 +167,22 @@ void readTelemetry() {
 }
 
 void displayTelemetry(const char* telemetry) {
-  tft.fillScreen(TFT_BLACK);
-  tft.setCursor(0, 0);
-  tft.println("Telemetry:");
+  oled.clearDisplay();
 
   const char* firstColon = strchr(telemetry, ':');
   if (!firstColon) {
-    tft.println("No data");
+    oled.setCursor(0, 0);
+    oled.println(F("No data"));
+    oled.display();
     return;
   }
 
   const char* payloadStart = firstColon + 1;
   size_t payloadLength = strlen(payloadStart);
   if (payloadLength == 0) {
-    tft.println("No data");
+    oled.setCursor(0, 0);
+    oled.println(F("No data"));
+    oled.display();
     return;
   }
 
@@ -185,14 +208,43 @@ void displayTelemetry(const char* telemetry) {
   }
 
   if (valueCount < 6) {
-    tft.println("Invalid telemetry");
+    oled.setCursor(0, 0);
+    oled.println(F("Invalid"));
+    oled.display();
     return;
   }
 
-  drawDistanceLine("FL", values[0]);
-  drawDistanceLine("FR", values[1]);
-  drawDistanceLine("RL", values[2]);
-  drawDistanceLine("RR", values[3]);
-  tft.printf("Speed: %.2f m/s\n", values[4]);
-  tft.printf("Dist: %.2f m\n", values[5]);
+  const int16_t leftX = 0;
+  const int16_t rightX = SCREEN_WIDTH / 2;
+  const int16_t lineHeight = 8;
+  const int16_t metricStartY = lineHeight * 3;
+  const int16_t metricSpacing = lineHeight + 2;
+
+  oled.setCursor(leftX, 0);
+  oled.println(F("Range (cm)"));
+
+  drawDistanceValue(leftX, lineHeight, "FL", values[0]);
+  drawDistanceValue(rightX, lineHeight, "FR", values[1]);
+  drawDistanceValue(leftX, lineHeight * 2, "RL", values[2]);
+  drawDistanceValue(rightX, lineHeight * 2, "RR", values[3]);
+
+  oled.setCursor(leftX, metricStartY);
+  oled.print(F("Speed: "));
+  if (values[4] < 0) {
+    oled.print(F("--.--"));
+  } else {
+    oled.print(values[4], 2);
+  }
+  oled.print(F(" m/s"));
+
+  oled.setCursor(leftX, metricStartY + metricSpacing);
+  oled.print(F("Distance: "));
+  if (values[5] < 0) {
+    oled.print(F("--.--"));
+  } else {
+    oled.print(values[5], 2);
+  }
+  oled.print(F(" m"));
+
+  oled.display();
 }
