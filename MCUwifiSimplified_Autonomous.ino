@@ -16,6 +16,9 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <ctype.h>
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 // =========================
 // WiFi Config
@@ -56,14 +59,24 @@ bool failsafeActive = false;
 // =========================
 // Autonomous mode settings
 // =========================
-bool autonomousMode = false;   // Enabled via controller AUTO:1; command
-int obstacleThreshold = 100;   // cm
-int targetSpeed = 50;          // percent of max
+bool autonomousMode = false;          // Enabled via controller AUTO:1; command
+float obstacleThresholdCm = 100.0f;   // cm
+const float targetSpeedMps = 0.5f;    // desired forward speed (m/s)
+const float speedDeadbandMps = 0.05f; // acceptable ± range around target speed
+
+const unsigned long telemetryTimeoutMs = 1000; // ms before considering telemetry stale
+unsigned long lastTelemetryUpdate = 0;
 
 // Latest telemetry values
-// Expected format: S:front,frontLeft,frontRight,rearLeft,rearRight,temp,hum,speed;
-int distances[5] = {0};  // F, FL, FR, RL, RR
-int speed = 0;
+// Format: S:front,frontLeft,frontRight,rearLeft,rearRight,temp,hum,speed;
+float frontDistance = NAN;
+float frontLeftDistance = NAN;
+float frontRightDistance = NAN;
+float rearLeftDistance = NAN;
+float rearRightDistance = NAN;
+float ambientTemperatureC = NAN;
+float relativeHumidityPct = NAN;
+float speedMps = NAN;
 
 // =========================
 // Setup
@@ -92,11 +105,10 @@ void setup() {
 void loop() {
   handleUDP();
   forwardTelemetry();
+  checkFailsafe();
 
-  if (autonomousMode) {
+  if (autonomousMode && !failsafeActive) {
     autonomousControl();
-  } else {
-    checkFailsafe();
   }
 }
 
@@ -179,19 +191,86 @@ void forwardTelemetry() {
 // Expected: S:front,frontLeft,frontRight,rearLeft,rearRight,temp,hum,speed;
 // =========================
 void parseTelemetry(String line) {
-  line.remove(0, 2); // remove "S:"
-  int parts[8];
-  int idx = 0;
-  char buf[128];
+  line.remove(0, 2); // strip "S:"
+
+  char buf[160];
   line.toCharArray(buf, sizeof(buf));
-  char* tok = strtok(buf, ",;");
-  while (tok && idx < 8) {
-    parts[idx++] = atoi(tok);
-    tok = strtok(NULL, ",;");
+
+  float parsed[8];
+  bool hasValue[8];
+  for (int i = 0; i < 8; ++i) {
+    parsed[i] = NAN;
+    hasValue[i] = false;
   }
-  if (idx >= 5) {
-    for (int i = 0; i < 5; i++) distances[i] = parts[i];
-    if (idx >= 8) speed = parts[7];
+
+  auto trimToken = [](char* token) {
+    while (token && *token && isspace(static_cast<unsigned char>(*token))) {
+      ++token;
+    }
+    if (!token) {
+      return token;
+    }
+    size_t len = strlen(token);
+    while (len > 0 && isspace(static_cast<unsigned char>(token[len - 1]))) {
+      token[--len] = '\0';
+    }
+    return token;
+  };
+
+  auto isNullToken = [](const char* token) {
+    if (!token) {
+      return true;
+    }
+    size_t len = strlen(token);
+    if (len != 4) {
+      return false;
+    }
+    return (tolower(static_cast<unsigned char>(token[0])) == 'n' &&
+            tolower(static_cast<unsigned char>(token[1])) == 'u' &&
+            tolower(static_cast<unsigned char>(token[2])) == 'l' &&
+            tolower(static_cast<unsigned char>(token[3])) == 'l');
+  };
+
+  char* context = nullptr;
+  uint8_t idx = 0;
+  char* token = strtok_r(buf, ",;", &context);
+  while (token && idx < 8) {
+    token = trimToken(token);
+    if (!token || token[0] == '\0' || isNullToken(token)) {
+      parsed[idx] = NAN;
+      hasValue[idx] = false;
+    } else {
+      char* endPtr = nullptr;
+      float value = strtof(token, &endPtr);
+      if (endPtr != nullptr) {
+        while (*endPtr && isspace(static_cast<unsigned char>(*endPtr))) {
+          ++endPtr;
+        }
+      }
+      if (endPtr != nullptr && *endPtr == '\0' && !isnan(value)) {
+        parsed[idx] = value;
+        hasValue[idx] = true;
+      } else {
+        parsed[idx] = NAN;
+        hasValue[idx] = false;
+      }
+    }
+
+    ++idx;
+    token = strtok_r(nullptr, ",;", &context);
+  }
+
+  frontDistance = (idx > 0 && hasValue[0]) ? parsed[0] : NAN;
+  frontLeftDistance = (idx > 1 && hasValue[1]) ? parsed[1] : NAN;
+  frontRightDistance = (idx > 2 && hasValue[2]) ? parsed[2] : NAN;
+  rearLeftDistance = (idx > 3 && hasValue[3]) ? parsed[3] : NAN;
+  rearRightDistance = (idx > 4 && hasValue[4]) ? parsed[4] : NAN;
+  ambientTemperatureC = (idx > 5 && hasValue[5]) ? parsed[5] : NAN;
+  relativeHumidityPct = (idx > 6 && hasValue[6]) ? parsed[6] : NAN;
+  speedMps = (idx > 7 && hasValue[7]) ? parsed[7] : NAN;
+
+  if (idx > 0) {
+    lastTelemetryUpdate = millis();
   }
 }
 
@@ -202,50 +281,73 @@ void autonomousControl() {
   int steer = 90;
   int throttle = 90;
 
-  bool frontBlocked  = (distances[0] > 0 && distances[0] < obstacleThreshold);
-  bool leftBlocked   = (distances[1] > 0 && distances[1] < obstacleThreshold);
-  bool rightBlocked  = (distances[2] > 0 && distances[2] < obstacleThreshold);
+  unsigned long now = millis();
+  bool telemetryFresh = (now - lastTelemetryUpdate) <= telemetryTimeoutMs;
+  static bool telemetryWarningPrinted = false;
 
-  // If all forward paths blocked -> reverse recovery
-  if (frontBlocked && leftBlocked && rightBlocked) {
-    Serial.println("All forward paths blocked - reversing!");
-
-    int rearLeft  = distances[3];
-    int rearRight = distances[4];
-
-    throttle = 70; // reverse
-    if (rearLeft > rearRight) {
-      steer = 60; // back while turning left
-    } else {
-      steer = 120; // back while turning right
+  if (!telemetryFresh) {
+    if (!telemetryWarningPrinted) {
+      Serial.println("Telemetry stale - holding position");
+      telemetryWarningPrinted = true;
     }
-
   } else {
-    // At least one forward path open
-    if (!frontBlocked) {
-      steer = 90; // straight
-    } else if (!leftBlocked && rightBlocked) {
-      steer = 60; // turn left
-    } else if (!rightBlocked && leftBlocked) {
-      steer = 120; // turn right
-    } else {
-      // Both sides open -> choose wider clearance
-      if (distances[1] > distances[2]) steer = 60;
-      else steer = 120;
-    }
+    telemetryWarningPrinted = false;
 
-    // Speed regulation for forward
-    int desired = targetSpeed;
-    if (speed < desired) {
-      throttle = 120; // more power
-    } else if (speed > desired) {
-      throttle = 80;  // less power
+    auto isObstacle = [&](float distance) {
+      return !isnan(distance) && distance > 0.0f && distance < obstacleThresholdCm;
+    };
+
+    auto clearance = [&](float distance) {
+      return isnan(distance) ? 0.0f : distance;
+    };
+
+    bool leftBlocked = isObstacle(frontLeftDistance);
+    bool rightBlocked = isObstacle(frontRightDistance);
+    bool forwardBlocked = leftBlocked && rightBlocked; // no dedicated front sensor yet
+
+    if (forwardBlocked) {
+      Serial.println("All forward paths blocked - reversing!");
+
+      throttle = 70; // reverse
+
+      float rearLeftClear = clearance(rearLeftDistance);
+      float rearRightClear = clearance(rearRightDistance);
+
+      if (isnan(rearLeftDistance) && isnan(rearRightDistance)) {
+        steer = 90; // unknown rear clearance -> back straight
+      } else if (isnan(rearRightDistance) || rearLeftClear > rearRightClear) {
+        steer = 60; // favour the clearer side
+      } else {
+        steer = 120;
+      }
     } else {
-      throttle = 100; // maintain
+      if (!leftBlocked && !rightBlocked) {
+        steer = 90; // both sides clear -> go straight
+      } else if (leftBlocked && !rightBlocked) {
+        steer = 120; // obstacle on the left -> turn right
+      } else if (rightBlocked && !leftBlocked) {
+        steer = 60;  // obstacle on the right -> turn left
+      } else {
+        // Both sensors report obstacles but at different ranges -> pick wider gap
+        float leftClear = clearance(frontLeftDistance);
+        float rightClear = clearance(frontRightDistance);
+        steer = (leftClear >= rightClear) ? 60 : 120;
+      }
+
+      if (!isnan(speedMps)) {
+        if (speedMps < targetSpeedMps - speedDeadbandMps) {
+          throttle = 120; // need more speed
+        } else if (speedMps > targetSpeedMps + speedDeadbandMps) {
+          throttle = 80;  // slow down
+        } else {
+          throttle = 100; // within deadband -> maintain
+        }
+      } else {
+        throttle = 100; // no speed estimate -> maintain moderate throttle
+      }
     }
   }
 
-  // Send command to VehicleManager Nano
   String cmd = "";
   cmd += "STEER:" + String(steer) + ";";
   cmd += "THROT:" + String(throttle) + ";";
