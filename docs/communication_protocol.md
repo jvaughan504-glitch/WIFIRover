@@ -16,6 +16,15 @@ Wi-Fi and serial links:
    wheel speed/distance telemetry to the Wi-Fi hub, which then relays the data
    to the controller.
 
+The repository also ships enhanced firmware for the robot Wi-Fi hub that can be
+flashed in place of the standard bridge:
+
+- **`MCUwifiSimplified_Autonomous.ino`** keeps the same networking pipeline but
+  can assume control when autonomous mode is requested.
+- **`MCUwifiSimplified_Autonomous_Web.ino`** layers on a mobile-friendly HTTP
+  dashboard and WebSocket stream (ports 80 and 81) while retaining the
+  autonomous behaviour.
+
 ```
 [Controller ESP32] ⇄ Wi-Fi UDP ⇄ [Robot ESP32] ⇄ UART1 ⇄ [Sensor Nano]
                                             ⇓ UART2
@@ -44,12 +53,25 @@ STEER:<value>;THROT:<value>;HORN:<0|1>;LIGHTS:<0|1>;AUTO:<0|1>;
 | `THROT`  | Electronic speed controller pulse width. Neutral/idle is `90`. | `0` (full reverse) to `180` (full forward) |
 | `HORN`   | Horn push-button state. | `0` = off, `1` = on |
 | `LIGHTS` | Latched auxiliary lighting state. | `0` = off, `1` = on |
-| `AUTO`   | Reserved for autonomous mode selection. | `0` = manual (default) |
+| `AUTO`   | Autonomous mode selection (used by optional hub firmwares). | `0` = manual, `1` = autonomous |
 
 Tokens are delimited with semicolons (`;`) and use a colon (`:`) between the
 token name and its value—there is no `CMD` prefix. The controller does not
 append a newline, but the robot ESP32 adds a trailing `\n` before forwarding the
 string to the Vehicle Manager over UART.
+
+With the stock `MCUwifiSimplified.ino` firmware the hub immediately relays the
+incoming token string to the Vehicle Manager. The optional
+`MCUwifiSimplified_Autonomous*.ino` sketches watch for the `AUTO` flag: when the
+controller (or Web UI) sends `AUTO:1;` the ESP32 stops forwarding joystick
+commands and instead synthesises steering/throttle outputs from the sensor
+telemetry. Sending `AUTO:0;` returns direct control to the operator, and both
+variants continue to honour failsafe timers so the Vehicle Manager still falls
+back to neutral if packets stop arriving.
+
+The `_Autonomous_Web` firmware also exposes horn/lights toggles and a live
+telemetry dashboard over HTTP/WebSocket without altering the UDP command shape,
+so existing controllers remain compatible.
 
 ### Robot → Vehicle Serial Framing
 The robot ESP32 forwards the UDP payload to the Vehicle Manager Nano and appends
@@ -70,19 +92,23 @@ tokens can be added as long as they follow the same `NAME:value;` pattern.
 The Sensor Manager Nano emits a telemetry frame every 200 ms using the format:
 
 ```
-S:<distFL>,<distFR>,<distRL>,<distRR>,<avgSpeed>,<totalDistance>;
+S:<front>,<frontLeft>,<frontRight>,<rearLeft>,<rearRight>,<temperature>,<humidity>,<avgSpeed>;
 ```
 
-- `dist*` – Ultrasonic distance measurements for the front-left, front-right,
-  rear-left, and rear-right sensors in centimetres. A value of `-1` denotes a
-  timeout/no reading.
+- `front` – Optional forward ultrasonic reading in centimetres. The reference
+  implementation outputs `null` when no dedicated front sensor is present.
+- `frontLeft`, `frontRight`, `rearLeft`, `rearRight` – Side/rear ultrasonic
+  distances in centimetres. Values of `-1` indicate a timeout.
+- `temperature` – Ambient temperature in °C. `nan` is emitted if the probe is
+  not fitted.
+- `humidity` – Relative humidity percentage. `nan` is emitted if the probe is
+  not fitted.
 - `avgSpeed` – Averaged wheel speed in metres per second.
-- `totalDistance` – Cumulative distance travelled in metres.
 
-Example frame:
+Example frame (using the default placeholders for missing probes):
 
 ```
-S:55.4,60.1,40.0,38.9,0.42,12.75;
+S:null,55.4,60.1,40.0,38.9,nan,nan,0.42;
 ```
 
 The robot ESP32 reads newline-terminated frames from the sensor UART, forwards
@@ -95,12 +121,16 @@ The controller searches the incoming telemetry string for the first colon, then
 extracts comma-separated values and displays them on the OLED display in the
 following order:
 
-1. Front-left distance (`FL`)
-2. Front-right distance (`FR`)
-3. Rear-left distance (`RL`)
-4. Rear-right distance (`RR`)
-5. Average speed (`m/s`)
-6. Total distance (`m`)
+1. Front distance (`F`)
+2. Front-left distance (`FL`)
+3. Front-right distance (`FR`)
+4. Rear-left distance (`RL`)
+5. Rear-right distance (`RR`)
+6. Average speed (`m/s`)
+7. Ambient temperature (`°C`)
+8. Relative humidity (`%`)
 
-Distance values of `< 0` are shown as `---` to indicate missing data.
+Distance values that time out (`-1`) or arrive as `null`/`nan` are rendered as
+`---` to indicate missing data. Environmental fields that report `nan` are shown
+as dashes as well.
 

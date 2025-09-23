@@ -21,6 +21,8 @@ studying each subsystem in isolation.
 | --- | --- |
 | `ControllerWifiSimplified.ino` | Firmware for the handheld ESP32 controller with oled UI. |
 | `MCUwifiSimplified.ino` | ESP32 access-point firmware that bridges Wi-Fi to dual UARTs. |
+| `MCUwifiSimplified_Autonomous.ino` | Optional ESP32 hub firmware with onboard obstacle avoidance and cruise control logic. |
+| `MCUwifiSimplified_Autonomous_Web.ino` | Optional ESP32 hub firmware that adds a mobile WebSocket dashboard plus autonomous toggles. |
 | `VehicleManager.ino` | Arduino Nano sketch controlling servos, ESC, horn, and lights. |
 | `SensorManager.ino`  | Arduino Nano telemetry node for ultrasonic rangefinders and wheel speed sensing. |
 | `docs/communication_protocol.md` | Detailed description of command packets and telemetry framing. |
@@ -34,7 +36,10 @@ studying each subsystem in isolation.
      supply servos/ESC current peaks.
 2. **Flash the firmware**
    - Upload each sketch to its respective board (controller ESP32, robot ESP32,
-     Vehicle Manager Nano, and Sensor Manager Nano).
+     Vehicle Manager Nano, and Sensor Manager Nano). The robot hub can run the
+     standard `MCUwifiSimplified.ino` bridge or one of the optional autonomous
+     variants if you want the ESP32 to handle obstacle avoidance or expose the
+     mobile dashboard.
    - Confirm serial baud rates match the sketches (115200 bps for all inter-board
      links).
 3. **Establish the network link**
@@ -51,6 +56,23 @@ studying each subsystem in isolation.
 The command string format, failsafe behaviour, and telemetry framing are fully
 documented in [`docs/communication_protocol.md`](docs/communication_protocol.md).
 Consult that guide when integrating new sensors or extending the command set.
+
+### Optional Robot Hub Firmware Variants
+
+The alternative ESP32 hub sketches build on the base networking code and remain
+drop-in replacements:
+
+- **`MCUwifiSimplified_Autonomous.ino`** – Enables on-device obstacle avoidance.
+  When the controller sends `AUTO:1;` the ESP32 stops forwarding joystick
+  packets and instead computes steering/throttle commands from the live
+  telemetry stream. Sending `AUTO:0;` returns control to the operator.
+- **`MCUwifiSimplified_Autonomous_Web.ino`** – Adds the same autonomous features
+  plus an integrated HTTP/WebSocket interface (port 80/81). The dashboard shows
+  distance, environmental, and speed readings and lets you toggle horn/lights or
+  change modes from a phone without reflashing other boards.
+
+If you stick with the base firmware the rover behaves exactly as documented in
+the original manual-control workflow.
 
 ## Contributing
 Pull requests and issue reports are welcome. Please include relevant wiring
