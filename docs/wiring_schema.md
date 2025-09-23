@@ -17,7 +17,7 @@ reproduce the hardware layout when assembling the WIFIRover platform.
   Nanos, and bridges Wi-Fi to two independent UARTs.
 - The **Vehicle Manager Nano** actuates the steering servos, ESC, horn relay, and
   auxiliary lights.
-- The **Sensor Manager Nano** aggregates four ultrasonic rangefinders and a
+- The **Sensor Manager Nano** aggregates four ultrasonic rangefinders, a
   wheel speed sensor, and DHT11 temp/humidity sensor. then streams telemetry.
 
 > ⚠️ *Always share a common ground between every board and peripheral.*
@@ -29,7 +29,7 @@ reproduce the hardware layout when assembling the WIFIRover platform.
 | Joystick Y (ADC)    | 35        | Same wiring as X axis. |
 | Button 1 (horn)     | 0         | Uses `INPUT_PULLUP`; connect button to ground. |
 | Button 2 (lights)   | 2         | Uses `INPUT_PULLUP`; connect button to ground. |
-| OLED display         | SPI pins  | Follows [Adafruit SSD1306 default wiring for your board profile. |
+| OLED display        | SPI pins  | Follows [Adafruit SSD1306 default wiring for your board profile. |
 
 Power the controller from a 3.3 V capable supply or LiPo pack via the ESP32's
 regulated input. The joystick potentiometer and buttons operate at 3.3 V logic.
