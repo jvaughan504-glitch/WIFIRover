@@ -17,8 +17,8 @@ reproduce the hardware layout when assembling the WIFIRover platform.
   Nanos, and bridges Wi-Fi to two independent UARTs.
 - The **Vehicle Manager Nano** actuates the steering servos, ESC, horn relay, and
   auxiliary lights.
-- The **Sensor Manager Nano** aggregates distance, temperature, and humidity
-  sensors and streams telemetry.
+- The **Sensor Manager Nano** aggregates four ultrasonic rangefinders and a
+  wheel speed sensor, then streams telemetry.
 
 > ⚠️ *Always share a common ground between every board and peripheral.*
 
@@ -68,18 +68,21 @@ the Nano. The sketch expects standard hobby ESC and servo PWM pulses (typically
 1–2 ms at ~50 Hz, generated via the Servo library).
 
 ## Sensor Manager Nano
-The sample sketch currently simulates sensor data, but the pin usage is intended
-for a suite of ultrasonic rangefinders and an environmental sensor:
+The provided sketch reads four HC-SR04-style ultrasonic modules and a hall-effect
+wheel speed sensor, then reports averaged speed and travelled distance:
 
-| Function               | Suggested Pins | Notes |
-|------------------------|----------------|-------|
-| Serial to ESP32 (TX)   | D1 (TX)        | Streams telemetry frames at 115200 bps. |
-| Serial from ESP32 (RX) | D0 (RX)        | Reserved if future commands are added. |
-| Ultrasonic sensors     | D2–D7          | Allocate trigger/echo pairs per sensor. |
-| Temperature/humidity   | A4 (SDA), A5 (SCL) | For I²C sensors such as the DHT20/HTU21. |
-| 5 V / GND              | 5 V, GND       | Shared with the robot ESP32 supply. |
+| Function                     | Nano Pin(s) | Notes |
+|------------------------------|-------------|-------|
+| Serial to ESP32 (TX)         | D1 (TX)     | Streams telemetry frames at 115200 bps. |
+| Serial from ESP32 (RX)       | D0 (RX)     | Reserved if future commands are added. |
+| Front-left ultrasonic sensor | D3 (trig), D4 (echo) | Tie sensor VCC to 5 V. |
+| Front-right ultrasonic sensor| D5 (trig), D6 (echo) | 10 µs trigger pulses generated in sketch. |
+| Rear-left ultrasonic sensor  | D7 (trig), D8 (echo) | Echo pins expect 5 V tolerant input. |
+| Rear-right ultrasonic sensor | D9 (trig), D10 (echo) | Keep sensor grounds common. |
+| Wheel speed sensor input     | D2          | Uses `attachInterrupt()` on RISING edges. |
+| 5 V / GND                    | 5 V, GND    | Shared with the robot ESP32 supply. |
 
-Adapt pin choices to match the actual sensors you deploy, ensuring the telemetry
-format documented in [`communication_protocol.md`](communication_protocol.md) is
-maintained.
+Adjust pin assignments as necessary, but preserve the telemetry format described
+in [`communication_protocol.md`](communication_protocol.md) so the controller UI
+continues to parse the data correctly.
 

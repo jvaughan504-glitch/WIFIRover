@@ -12,8 +12,9 @@ Wi-Fi and serial links:
 3. **Vehicle Manager (Arduino Nano)** – Drives the steering servos, electronic
    speed controller (ESC), horn, and lighting system based on commands received
    from the Wi-Fi hub.
-4. **Sensor Manager (Arduino Nano)** – Streams distance, temperature, and
-   humidity readings to the Wi-Fi hub, which are then sent to the controller.
+4. **Sensor Manager (Arduino Nano)** – Streams ultrasonic distance readings and
+   wheel speed/distance telemetry to the Wi-Fi hub, which then relays the data
+   to the controller.
 
 ```
 [Controller ESP32] ⇄ Wi-Fi UDP ⇄ [Robot ESP32] ⇄ UART1 ⇄ [Sensor Nano]
@@ -34,63 +35,72 @@ The controller concatenates multiple command tokens into a single ASCII string
 before transmitting it via UDP:
 
 ```
-CMD STEER <value>;CMD THROT <value>;CMD HORN <0|1>;CMD LIGHTS <0|1>;
+STEER:<value>;THROT:<value>;HORN:<0|1>;LIGHTS:<0|1>;AUTO:<0|1>;
 ```
 
 | Token | Description | Value range / meaning |
 | --- | --- | --- |
-| `CMD STEER`  | Front/rear steering command mapped from the joystick X axis. | `-90` (full left) to `90` (full right) |
-| `CMD THROT`  | Throttle command mapped from the joystick Y axis. | `-100` (full reverse) to `100` (full forward) |
-| `CMD HORN`   | Horn push-button state. | `0` = off, `1` = on |
-| `CMD LIGHTS` | Latched auxiliary lighting state. | `0` = off, `1` = on |
+| `STEER`  | Steering pulse width sent to both servos. Neutral is `90`. | `0` (full left) to `180` (full right) |
+| `THROT`  | Electronic speed controller pulse width. Neutral/idle is `90`. | `0` (full reverse) to `180` (full forward) |
+| `HORN`   | Horn push-button state. | `0` = off, `1` = on |
+| `LIGHTS` | Latched auxiliary lighting state. | `0` = off, `1` = on |
+| `AUTO`   | Reserved for autonomous mode selection. | `0` = manual (default) |
 
-Each packet is terminated with a newline before being forwarded to the Vehicle
-Manager over UART.
+Tokens are delimited with semicolons (`;`) and use a colon (`:`) between the
+token name and its value—there is no `CMD` prefix. The controller does not
+append a newline, but the robot ESP32 adds a trailing `\n` before forwarding the
+string to the Vehicle Manager over UART.
 
 ### Robot → Vehicle Serial Framing
-The robot ESP32 forwards the UDP payload without modification to the Vehicle
-Manager Nano (followed by `\n`). The Vehicle Manager parses tokens separated by
-semicolons (`;`) and expects the prefix shown above. Additional tokens can be
-introduced by following the `CMD <NAME> <value>;` convention.
+The robot ESP32 forwards the UDP payload to the Vehicle Manager Nano and appends
+`\n`. The Vehicle Manager tokenizes the incoming line on semicolons and searches
+for the `STEER:`, `THROT:`, `HORN:`, `LIGHTS:`, and `AUTO:` prefixes. Additional
+tokens can be added as long as they follow the same `NAME:value;` pattern.
 
 ### Failsafe Handling
 - The robot ESP32 tracks the arrival time of UDP packets. If no packet arrives
-  within 1 second it sends a `CMD FAILSAFE` newline-terminated message to the
-  Vehicle Manager and sets an internal failsafe flag.
+  within 1 second it sends `CMD FAILSAFE\n` to the Vehicle Manager and sets an
+  internal failsafe flag.
 - The Vehicle Manager implements an additional watchdog. If it does not process
-  any serial input for 500 ms it reverts steering and throttle to neutral (90°
-  servo position/ESC idle) and clears horn/lights/autonomous flags.
+  any serial input for 500 ms it reverts steering and throttle to neutral
+  (90-degree servo position / ESC idle) and clears horn, lights, and autonomous
+  flags. It accepts either `CMD FAILSAFE` or `FAILSAFE` tokens.
 
 ## Sensor Telemetry Stream
-The Sensor Manager Nano emits a telemetry frame every 500 ms using the format:
+The Sensor Manager Nano emits a telemetry frame every 200 ms using the format:
 
 ```
-S:<front>,<frontLeft>,<frontRight>,<left>,<right>,<temperature>,<humidity>;
+S:<distFL>,<distFR>,<distRL>,<distRR>,<avgSpeed>,<totalDistance>;
 ```
 
-All fields are integers representing centimetres for distance values, degrees
-Celsius for temperature, and percentage for relative humidity. Example:
+- `dist*` – Ultrasonic distance measurements for the front-left, front-right,
+  rear-left, and rear-right sensors in centimetres. A value of `-1` denotes a
+  timeout/no reading.
+- `avgSpeed` – Averaged wheel speed in metres per second.
+- `totalDistance` – Cumulative distance travelled in metres.
+
+Example frame:
 
 ```
-S:100,95,102,85,90,25,50;
+S:55.4,60.1,40.0,38.9,0.42,12.75;
 ```
 
 The robot ESP32 reads newline-terminated frames from the sensor UART, forwards
 complete lines to the controller via UDP, and mirrors them to its serial console
-for debugging.
+for debugging. Whitespace preceding or following the payload is trimmed before
+transmission.
 
 ### Controller Telemetry Rendering
 The controller searches the incoming telemetry string for the first colon, then
 extracts comma-separated values and displays them on the TFT display in the
 following order:
 
-1. Front distance (`F`)
-2. Front-left distance (`FL`)
-3. Front-right distance (`FR`)
-4. Left side distance (`L`)
-5. Right side distance (`R`)
-6. Temperature (`T`)
-7. Humidity (`H`)
+1. Front-left distance (`FL`)
+2. Front-right distance (`FR`)
+3. Rear-left distance (`RL`)
+4. Rear-right distance (`RR`)
+5. Average speed (`m/s`)
+6. Total distance (`m`)
 
-Values are labelled and units appended (`cm`, `C`, `%`).
+Distance values of `< 0` are shown as `---` to indicate missing data.
 

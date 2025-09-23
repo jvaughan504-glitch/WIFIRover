@@ -22,7 +22,7 @@ studying each subsystem in isolation.
 | `ControllerWifiSimplified.ino` | Firmware for the handheld ESP32 controller with TFT UI. |
 | `MCUwifiSimplified.ino` | ESP32 access-point firmware that bridges Wi-Fi to dual UARTs. |
 | `VehicleManager.ino` | Arduino Nano sketch controlling servos, ESC, horn, and lights. |
-| `SensorManager,ino`  | Ardino Nano sketch controlling sesors. |
+| `SensorManager.ino`  | Arduino Nano telemetry node for ultrasonic rangefinders and wheel speed sensing. |
 | `docs/communication_protocol.md` | Detailed description of command packets and telemetry framing. |
 | `docs/wiring_schema.md` | Pinout reference and wiring guidelines for all modules. |
 
