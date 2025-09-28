@@ -53,6 +53,11 @@ bool failsafeActive = false;
 bool autonomousMode = false;
 bool hornOn = false;
 bool lightsOn = false;
+bool controllerAutoRequest = false;
+bool webAutoRequest = false;
+
+void sendStatus();
+void updateAutonomousMode();
 
 float obstacleThreshold = 100.0f;
 float targetSpeed = 0.6f; // metres per second
@@ -220,12 +225,15 @@ void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t 
       String cmd = doc["cmd"];
       if (cmd == "setmode") {
         if (String(doc["pass"]) == webPass) {
-          autonomousMode = doc["mode"] == 1;
+          webAutoRequest = doc["mode"] == 1;
+          updateAutonomousMode();
         }
       } else if (cmd == "horn") {
         hornOn = !hornOn;
+        sendStatus();
       } else if (cmd == "lights") {
         lightsOn = !lightsOn;
+        sendStatus();
       }
     }
   }
@@ -265,11 +273,32 @@ void handleUDP() {
     lastPacketTime = millis();
     failsafeActive = false;
 
-    if (strstr(packetBuffer, "AUTO:1") != NULL) autonomousMode = true;
-    else if (strstr(packetBuffer, "AUTO:0") != NULL) autonomousMode = false;
+    if (strstr(packetBuffer, "AUTO:1") != NULL) {
+      controllerAutoRequest = true;
+    } else if (strstr(packetBuffer, "AUTO:0") != NULL) {
+      controllerAutoRequest = false;
+    }
+
+    updateAutonomousMode();
 
     if (!autonomousMode) {
-      nano2.print(packetBuffer);
+      String command(packetBuffer);
+      int autoPos = command.indexOf("AUTO:");
+      if (autoPos >= 0) {
+        int valueStart = autoPos + 5;
+        int valueEnd = command.indexOf(';', valueStart);
+        if (valueEnd == -1) valueEnd = command.length();
+        command = command.substring(0, valueStart) + (autonomousMode ? "1" : "0") + command.substring(valueEnd);
+      } else {
+        if (!command.endsWith(";")) {
+          command += ";";
+        }
+        command += "AUTO:";
+        command += (autonomousMode ? "1" : "0");
+        command += ";";
+      }
+
+      nano2.print(command);
       nano2.print("\n");
     }
   }
@@ -424,5 +453,15 @@ void checkFailsafe() {
     failsafeActive = true;
     nano2.println("CMD FAILSAFE");
     nano2.flush();
+  }
+}
+
+void updateAutonomousMode() {
+  bool newMode = controllerAutoRequest || webAutoRequest;
+  if (newMode != autonomousMode) {
+    autonomousMode = newMode;
+    sendStatus();
+  } else {
+    autonomousMode = newMode;
   }
 }
